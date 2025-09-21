@@ -20,8 +20,6 @@ pub fn create_vm(
     let domain_xml =
         utils::generate_installation_domain_xml(name, memory, vcpus, disk_path, seed_iso_path);
 
-    println!("Generated Domain XML:\n{}", domain_xml);
-
     let mut conn = Connect::open(Some("qemu:///system")).unwrap();
 
     let domain = Domain::define_xml(&mut conn, &domain_xml).unwrap();
