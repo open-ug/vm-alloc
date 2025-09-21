@@ -1,6 +1,6 @@
 use crate::helpers;
 use crate::vm::types;
-//use serde_yml;
+use serde_yml;
 use sha_crypt::{Sha512Params, sha512_simple};
 use std::path::Path;
 use std::process::Command;
@@ -199,40 +199,39 @@ pub fn hash_password_sha512(password: &str) -> Result<String, sha_crypt::CryptEr
 pub fn create_seed_iso(name: &str, username: &str, password: &str) -> String {
     let hashed_password = hash_password_sha512(password).unwrap();
 
-    println!("Username: {}", username);
-    println!("Password: {}", password);
-    println!("Hashed Password: {}", hashed_password);
+    let user_data = types::CloudInitUserData {
+        hostname: name.to_string(),
+        locale: "en_US.UTF-8".to_string(),
+        users: vec![types::CloudInitUser {
+            name: username.to_string(),
+            gecos: "VM User".to_string(),
+            sudo: "ALL=(ALL) NOPASSWD:ALL".to_string(),
+            shell: "/bin/bash".to_string(),
+            passwd: hashed_password,
+            groups: vec!["sudo".to_string()],
+        }],
+        keyboard: types::Keyboard {
+            layout: "us".to_string(),
+        },
+        ssh_pwauth: true,
+        lock_passwd: false,
+        ssh: types::Ssh {
+            install_server: true,
+        },
+    };
 
-    let user_data_yaml = format!(
-        r#"#cloud-config
-hostname: {}
-locale: en_US.UTF-8
-keyboard:
-  layout: us
+    let meta_data = types::CloudInitMetaData {
+        instance_id: format!("{}-instance", name),
+        local_hostname: name.to_string(),
+    };
+    let meta_data_yaml =
+        serde_yml::to_string(&meta_data).expect("Failed to serialize meta data to YAML");
 
-users:
-  - name: {}
-    sudo: "ALL=(ALL) NOPASSWD:ALL"
-    lock_passwd: false
-    passwd: $6$XiMjf17UrO/hnVZj$bJa4BRkVrdKwEDtEJPh4D3Xiw6LFu87LlaX4l9fbk7OVp2w5WmN9VTmQA6hQ0N3zegiXPXcfTVWIYo80Vqt9i.
-    shell: /bin/bash
-    groups: [sudo]
-    gecos: User
-    
-ssh_pwauth: true
-"#,
-        name, username
-    );
-
-    let meta_data_yaml = format!(
-        r#"instance-id: {}
-local-hostname: {}
-"#,
-        name, name
-    );
+    let mut user_data_yaml =
+        serde_yml::to_string(&user_data).expect("Failed to serialize user data to YAML");
 
     // add required #cloud-config header to user_data
-    //user_data_yaml = format!("#cloud-config\n{}", user_data_yaml);
+    user_data_yaml = format!("#cloud-config\n{}", user_data_yaml);
 
     println!("User Data YAML:\n{}", user_data_yaml);
     println!("Meta Data YAML:\n{}", meta_data_yaml);
