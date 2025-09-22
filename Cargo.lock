@@ -730,7 +730,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vmprov"
+name = "vm-alloc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
