@@ -3,7 +3,7 @@ use vm::{boot_vm, create_vm, delete_vm, list_vms, restart_vm, shutdown_vm, vm_in
 
 pub mod helpers;
 pub mod vm;
-/// Search for a pattern in a file and display the lines that contain it.
+/// Search for a pattern in a file and display the lines that contain it. T
 #[derive(Parser)]
 struct Cli {
     #[command(subcommand)]
