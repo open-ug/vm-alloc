@@ -1,0 +1,122 @@
+name: Smart Auto Merge
+
+on:
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Smart Merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+
+            const pr = context.payload.pull_request;
+            if (!pr || pr.state !== "open") return;
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // ---------------------------
+            // 1️⃣ Check approvals
+            // ---------------------------
+            const reviews = await github.rest.pulls.listReviews({
+              owner, repo,
+              pull_number: pr.number
+            });
+
+            const approvals = reviews.data.filter(r => r.state === "APPROVED");
+            if (approvals.length < 1) {
+              core.info("Not enough approvals");
+              return;
+            }
+
+            // ---------------------------
+            // 2️⃣ Check CI status
+            // ---------------------------
+            const combined = await github.rest.repos.getCombinedStatusForRef({
+              owner, repo,
+              ref: pr.head.sha
+            });
+
+            if (combined.data.state !== "success") {
+              core.info("Checks not successful");
+              return;
+            }
+
+            // ---------------------------
+            // 3️⃣ Get all commits (for authorship)
+            // ---------------------------
+            const commits = await github.rest.pulls.listCommits({
+              owner, repo,
+              pull_number: pr.number
+            });
+
+            const authorMap = new Map();
+
+            for (const c of commits.data) {
+              if (c.author) {
+                authorMap.set(
+                  c.author.login,
+                  `${c.author.id}+${c.author.login}@users.noreply.github.com`
+                );
+              }
+            }
+
+            // Ensure PR creator included
+            authorMap.set(
+              pr.user.login,
+              `${pr.user.id}+${pr.user.login}@users.noreply.github.com`
+            );
+
+            // ---------------------------
+            // 4️⃣ Build Conventional Commit title
+            // ---------------------------
+            // Assumes PR title already follows conventional format.
+            const commitTitle = pr.title;
+
+            // ---------------------------
+            // 5️⃣ Build trailers
+            // ---------------------------
+            let trailers = "";
+
+            // Co-authors
+            for (const [login, email] of authorMap.entries()) {
+              trailers += `Co-authored-by: ${login} <${email}>\n`;
+            }
+
+            // Reviewer trailers
+            for (const review of approvals) {
+              if (review.user) {
+                trailers += `Reviewed-by: ${review.user.login} <${review.user.id}+${review.user.login}@users.noreply.github.com>\n`;
+              }
+            }
+
+            const commitMessage = `
+${pr.body || ""}
+
+${trailers}
+            `;
+
+            // ---------------------------
+            // 6️⃣ Squash Merge via API
+            // ---------------------------
+            await github.rest.pulls.merge({
+              owner,
+              repo,
+              pull_number: pr.number,
+              merge_method: "squash",
+              commit_title: commitTitle,
+              commit_message: commitMessage.trim()
+            });
+
+            core.info(`PR #${pr.number} merged successfully`);
