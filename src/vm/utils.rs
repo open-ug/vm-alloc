@@ -2,7 +2,9 @@ use crate::helpers;
 use crate::vm::types;
 use serde_yml;
 use sha_crypt::{Sha512Params, sha512_simple};
+use std::env;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use uuid::Uuid;
 
@@ -249,13 +251,18 @@ pub fn create_seed_iso(name: &str, username: &str, password: &str) -> String {
         }
     }
 
-    let user_data_file = format!("/tmp/{}-user-data", name);
-    let meta_data_file = format!("/tmp/{}-meta-data", name);
+    let temp_dir = env::temp_dir();
+
+    let user_data_file: PathBuf = temp_dir.join(format!("{}-user-data", name));
+
+    let meta_data_file: PathBuf = temp_dir.join(format!("{}-meta-data", name));
 
     std::fs::write(&user_data_file, user_data_yaml).expect("Unable to write user-data file");
     std::fs::write(&meta_data_file, meta_data_yaml).expect("Unable to write meta-data file");
     let output = Command::new("cloud-localds")
-        .args(&[&iso_path, &user_data_file, &meta_data_file])
+        .arg(&iso_path)
+        .arg(&user_data_file)
+        .arg(&meta_data_file)
         .output()
         .expect("Failed to execute cloud-localds command");
     if output.status.success() {
