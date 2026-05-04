@@ -1,6 +1,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use xmltree::{Element, XMLNode};
+pub mod init;
 
 /// Recursively convert JSON value into XML element
 fn value_to_xml(value: &Value, tag: &str) -> Element {

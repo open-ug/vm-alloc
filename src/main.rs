@@ -12,6 +12,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Init,
     Create {
         /// Name of the VM
         #[arg(short, long)]
@@ -69,6 +70,9 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Init => {
+            helpers::init::initialize();
+        }
         Commands::Boot { name } => {
             boot_vm(&name);
         }

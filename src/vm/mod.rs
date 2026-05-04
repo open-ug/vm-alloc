@@ -3,6 +3,7 @@ use virt::domain::Domain;
 
 //use crate::helpers;
 
+pub mod qmp;
 pub mod types;
 pub mod utils;
 

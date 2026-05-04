@@ -238,7 +238,7 @@ pub fn create_seed_iso(name: &str, username: &str, password: &str) -> String {
     println!("User Data YAML:\n{}", user_data_yaml);
     println!("Meta Data YAML:\n{}", meta_data_yaml);
 
-    let iso_path = format!("/var/lib/libvirt/images/{}-seed.iso", name);
+    let iso_path = format!("/var/lib/libvirt/images/{}-seed.img", name);
     let iso_path_obj = Path::new(&iso_path);
     if let Some(parent) = iso_path_obj.parent() {
         if !parent.exists() {
