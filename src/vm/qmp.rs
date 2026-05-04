@@ -65,3 +65,20 @@ pub fn init_qmp(stream: &mut UnixStream) {
     let cmd = r#"{ "execute": "qmp_capabilities" }"#;
     stream.write_all(cmd.as_bytes()).unwrap();
 }
+pub fn query_vm_status(stream: &mut UnixStream) -> Result<String, Box<dyn std::error::Error>> {
+    // Send command
+    stream.write_all(b"{ \"execute\": \"query-status\" }\n")?;
+
+    // Read response
+    let mut buffer = [0; 4096];
+    let n = stream.read(&mut buffer)?;
+
+    let response = String::from_utf8_lossy(&buffer[..n]).to_string();
+
+    Ok(response)
+}
+
+pub fn kill_vm(stream: &mut std::os::unix::net::UnixStream) {
+    let cmd = r#"{ "execute": "quit" }"#;
+    stream.write_all(cmd.as_bytes()).unwrap();
+}

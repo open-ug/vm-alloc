@@ -1,5 +1,9 @@
+use serde_json::Value;
+use std::io::Read;
 use virt::connect::Connect;
 use virt::domain::Domain;
+
+use crate::vm::qmp::start_vm;
 
 //use crate::helpers;
 
@@ -18,102 +22,94 @@ pub fn create_vm(
     let seed_iso_path = utils::create_seed_iso(name, username, password);
     let disk_path = utils::create_qemu_img_disk(name, disk_size);
 
-    let domain_xml =
-        utils::generate_installation_domain_xml(name, memory, vcpus, disk_path, seed_iso_path);
+    // current working directory + ./vm-data/{name}.sock
+    let qmp_socket = std::env::current_dir()
+        .unwrap()
+        .join("vm-data")
+        .join(format!("{}.sock", name))
+        .to_string_lossy()
+        .to_string();
 
-    let mut conn = Connect::open(Some("qemu:///system")).unwrap();
-
-    let domain = Domain::define_xml(&mut conn, &domain_xml).unwrap();
-
-    domain.create().unwrap();
+    start_vm(&disk_path, &seed_iso_path, &qmp_socket);
 }
 
 pub fn boot_vm(name: &str) {
     println!("Booting VM: {}", name);
-
-    let mut conn = Connect::open(Some("qemu:///system")).unwrap();
-    let domain = Domain::lookup_by_name(&mut conn, name).unwrap();
-    domain.create().unwrap();
 }
 
 pub fn delete_vm(name: &str) {
     println!("Deleting VM: {}", name);
-    let mut conn = Connect::open(Some("qemu:///system")).unwrap();
-    let domain = Domain::lookup_by_name(&mut conn, name).unwrap();
-    if domain.is_active().unwrap() {
-        domain.destroy().unwrap();
-    }
-
-    domain.undefine().unwrap();
 }
 
 pub fn list_vms() {
     println!("Listing all VMs");
-    let conn = Connect::open(Some("qemu:///system")).unwrap();
-    let domains = conn.list_all_domains(0).unwrap();
-    for domain in domains {
-        let name = domain.get_name().unwrap();
-        let id = domain.get_id().unwrap_or(0); // 0 means inactive
-        let is_active = domain.is_active().unwrap();
-        println!(
-            "Name: {}, ID: {}, Active: {}",
-            name,
-            if id == 0 {
-                "N/A".to_string()
-            } else {
-                id.to_string()
-            },
-            is_active
-        );
-    }
 }
 
 pub fn shutdown_vm(name: &str) {
     println!("Shutting down VM: {}", name);
-    let mut conn = Connect::open(Some("qemu:///system")).unwrap();
-    let domain = Domain::lookup_by_name(&mut conn, name).unwrap();
+    let qmp_path = std::env::current_dir()
+        .unwrap()
+        .join("vm-data")
+        .join(format!("{}.sock", name))
+        .to_string_lossy()
+        .to_string();
+    let mut stream = qmp::connect_qmp(&qmp_path);
 
-    if domain.is_active().unwrap() {
-        domain.shutdown().unwrap();
-        let mut timeout = 10; // seconds
-        while domain.is_active().unwrap() && timeout > 0 {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            timeout -= 1;
-        }
-        if domain.is_active().unwrap() {
-            println!("Graceful shutdown timed out, forcing power off.");
-            domain.destroy().unwrap();
-        } else {
-            println!("Domain {} has been shut down gracefully.", name);
-        }
-    } else {
-        println!("Domain {} is not active.", name);
-    }
+    qmp::init_qmp(&mut stream);
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    qmp::kill_vm(&mut stream);
+    println!("Sent kill signal to VM via QMP");
 }
 
 pub fn restart_vm(name: &str) {
     println!("Restarting VM: {}", name);
-    let mut conn = Connect::open(Some("qemu:///system")).unwrap();
-    let domain = Domain::lookup_by_name(&mut conn, name).unwrap();
-    domain.reboot(0).unwrap();
 }
 
 pub fn vm_info(name: &str) {
     println!("Getting info for VM: {}", name);
 
-    let conn = Connect::open(Some("qemu:///system")).unwrap();
-    let domain = Domain::lookup_by_name(&conn, name).unwrap();
+    let qmp_path = std::env::current_dir()
+        .unwrap()
+        .join("vm-data")
+        .join(format!("{}.sock", name))
+        .to_string_lossy()
+        .to_string();
 
-    // state (the tuple contents/shape depend on the binding; printing for debugging)
-    if let Ok(state) = domain.get_state() {
-        println!("State code: {:?}, reason: {:?}", state.0, state.1);
-    }
+    let mut stream = qmp::connect_qmp(&qmp_path);
 
-    // mem / vcpus
-    if let Ok(max_mem) = domain.get_max_memory() {
-        println!("Max memory: {} KiB", max_mem);
-    }
-    if let Ok(vcpus) = domain.get_max_vcpus() {
-        println!("vCPUs: {}", vcpus);
-    }
+    // 2. Init QMP
+    qmp::init_qmp(&mut stream);
+
+    let mut buffer = [0; 4096];
+    let _ = stream.read(&mut buffer);
+
+    // 3. Query status
+    let response = qmp::query_vm_status(&mut stream).expect("Failed to query VM status via QMP");
+
+    // 4. Parse JSON
+    let v: Value = serde_json::from_str(&response).expect("Failed to parse QMP response as JSON");
+
+    let status = v["return"]["status"].as_str().unwrap_or("unknown");
+    let running = v["return"]["running"].as_bool().unwrap_or(false);
+    let singlestep = v["return"]["singlestep"].as_bool().unwrap_or(false);
+
+    // 5. Print useful info
+    println!("================ VM INFO ================");
+    println!("State       : {}", status);
+    println!("Running     : {}", running);
+    println!("Single Step : {}", singlestep);
+
+    // Optional: derive a simpler interpretation
+    let interpreted = match status {
+        "running" => "VM is actively executing",
+        "paused" => "VM is paused",
+        "shutdown" => "VM is powered off",
+        "internal-error" => "VM crashed or failed",
+        _ => "Unknown state",
+    };
+
+    println!("Meaning     : {}", interpreted);
+    println!("=========================================");
 }

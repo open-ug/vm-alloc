@@ -6,7 +6,7 @@ async fn download_ubuntu_cloud_image() -> Result<String, Box<dyn std::error::Err
     let url = "https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-amd64.img";
 
     let dir = Path::new("./vm-data");
-    let file_path = dir.join("ubuntu-24.04-server-cloudimg-amd64.img");
+    let file_path = dir.join("cloud.img");
 
     // 1. Create directory if it doesn't exist
     if !dir.exists() {

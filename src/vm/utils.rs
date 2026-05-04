@@ -9,9 +9,13 @@ use std::process::Command;
 use uuid::Uuid;
 
 pub fn create_qemu_img_disk(name: &str, size_gb: u64) -> String {
-    let image_dir = "/var/lib/libvirt/images";
+    let image_dir = std::env::current_dir()
+        .unwrap()
+        .join("vm-data")
+        .to_string_lossy()
+        .to_string();
     let disk_path = format!("{}/{}.qcow2", image_dir, name);
-    let cloud_img = format!("{}/iso/noble-server-cloudimg-amd64.img", image_dir);
+    let cloud_img = format!("{}/cloud.img", image_dir);
     let disk_path_obj = Path::new(&disk_path);
 
     // 2. Ensure the directory exists. This is necessary because the program is creating a file
@@ -52,11 +56,11 @@ pub fn create_qemu_img_disk(name: &str, size_gb: u64) -> String {
     }
 
     println!("Changing ownership of {} to libvirt-qemu...", &disk_path);
-    Command::new("chown")
-        .arg("libvirt-qemu:libvirt-qemu")
-        .arg(&disk_path)
-        .status()
-        .expect("Failed to execute `chown` command. Please ensure you are running the program with `sudo`.");
+    /* Command::new("chown")
+    .arg("libvirt-qemu:libvirt-qemu")
+    .arg(&disk_path)
+    .status()
+    .expect("Failed to execute `chown` command. Please ensure you are running the program with `sudo`."); */
 
     format!("{}", disk_path)
 }
@@ -199,6 +203,11 @@ pub fn hash_password_sha512(password: &str) -> Result<String, sha_crypt::CryptEr
 }
 
 pub fn create_seed_iso(name: &str, username: &str, password: &str) -> String {
+    let data_dir = std::env::current_dir()
+        .unwrap()
+        .join("vm-data")
+        .to_string_lossy()
+        .to_string();
     let hashed_password = hash_password_sha512(password).unwrap();
 
     let user_data = types::CloudInitUserData {
@@ -238,7 +247,7 @@ pub fn create_seed_iso(name: &str, username: &str, password: &str) -> String {
     println!("User Data YAML:\n{}", user_data_yaml);
     println!("Meta Data YAML:\n{}", meta_data_yaml);
 
-    let iso_path = format!("/var/lib/libvirt/images/{}-seed.img", name);
+    let iso_path = format!("{}/{}-seed.img", data_dir, name);
     let iso_path_obj = Path::new(&iso_path);
     if let Some(parent) = iso_path_obj.parent() {
         if !parent.exists() {
