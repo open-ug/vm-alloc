@@ -11,16 +11,52 @@ This project is intended for *research and exploration of virtualization in clou
 - Installed dependencies:
   - `libvirt`
   - `qemu`
+  - `firecracker`
   - `virt-install`
   - `cloud-utils` (for `cloud-init`)
 - Ubuntu cloud images.
 
 ## Usage
 
+1. Clone this repository
+
 ```sh
+git clone https://github.com/open-ug/vm-alloc.git
+```
+
+2. Install and Setup dependencies
+
+```sh
+sudo apt update
+
+# Install QEMU, libvirt etc
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients virtinst bridge-utils cloud-utils
+
+sudo systemctl enable --now libvirtd
+
+sudo usermod -aG libvirt $(whoami)
+
+newgrp libvirt
+```
+
+To install Firecraker, follow the [Getting Started with Firecracker Guide](https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md)
+
+3. Run the `init` command
+
+```sh
+cargo run init
+```
+
+4. Then Run the program
+
+```sh
+$ cargo run
+
+
 Usage: vmprov <COMMAND>
 
 Commands:
+  init
   create    
   list      
   delete    
@@ -34,11 +70,14 @@ Options:
   -h, --help  Print help
 ```
 
+> Note: Different branches on this project explore different implementations of this program as follows
+> 
+> - The `main` branch explores an implementation using `libvirt` and `QEMU`
+> - The `qemu-backend` branch explores and implementation using `QEMU` with the QEMU Monitor Protocol with cloud images
+> - The `firecracker-backend` branch explores and implementation using AWS Firecracker with MicroVMs
+
 ## Disclaimer
 
 This project is experimental and should not be used in production.
 It is provided as-is for research purposes.
 
-## Author
-
-Created by [Beingana Jim Junior](https://jim-junior.github.io/).
